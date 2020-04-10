@@ -107,29 +107,27 @@ def get_model(include_top=False, model='vgg16', weights=None, stream=1,
     if model == 'resnet50':
 
         if classes is None:
-            classes = 8631
+            classes = 29
 
         if weights == 'vggface' and include_top and classes != 8631:
             raise ValueError(
                 'If using `weights` as vggface original with `include_top`'
                 ' as true, `classes` should be 8631')
 
-        return RESNET50(include_top=include_top, input_tensor=input_tensor,
-                        input_shape=input_shape, pooling=pooling,
-                        weights=weights,
-                        classes=classes)
+        return RESNET50(include_top=include_top, input_1_tensor=input_1_tensor, input_2_tensor=input_2_tensor,
+                        input_shape=input_shape, pooling=pooling, stream=stream, merge_style=merge_style,
+                        merge_point=merge_point, weights=weights, classes=classes)
 
     if model == 'senet50':
 
         if classes is None:
-            classes = 8631
+            classes = 29
 
         if weights == 'vggface' and include_top and classes != 8631:
             raise ValueError(
                 'If using `weights` as vggface original with `include_top`'
                 ' as true, `classes` should be 8631')
 
-        return SENET50(include_top=include_top, input_tensor=input_tensor,
-                       input_shape=input_shape, pooling=pooling,
-                       weights=weights,
-                       classes=classes)
+        return SENET50(include_top=include_top, input_1_tensor=input_1_tensor, input_2_tensor=input_2_tensor,
+                        input_shape=input_shape, pooling=pooling, stream=stream, merge_style=merge_style,
+                        merge_point=merge_point, weights=weights, classes=classes)

@@ -19,38 +19,37 @@ import warnings
 from keras.models import Model
 
 
-
 def bottom(img_input, name):  # 0.3077
     # Block 1
-    x = Conv2D(64, (3, 3), activation='relu', padding='same', name='conv1_1_'+name)(img_input)
-    x = Conv2D(64, (3, 3), activation='relu', padding='same', name='conv1_2_'+name)(x)
-    x = MaxPooling2D((2, 2), strides=(2, 2), name='pool1_'+name)(x)
+    x = Conv2D(64, (3, 3), activation='relu', padding='same', name='conv1_1_' + name)(img_input)
+    x = Conv2D(64, (3, 3), activation='relu', padding='same', name='conv1_2_' + name)(x)
+    x = MaxPooling2D((2, 2), strides=(2, 2), name='pool1_' + name)(x)
     # Block 2
-    x = Conv2D(128, (3, 3), activation='relu', padding='same', name='conv2_1_'+name)(x)
-    x = Conv2D(128, (3, 3), activation='relu', padding='same', name='conv2_2_'+name)(x)
-    x = MaxPooling2D((2, 2), strides=(2, 2), name='pool2_'+name)(x)
+    x = Conv2D(128, (3, 3), activation='relu', padding='same', name='conv2_1_' + name)(x)
+    x = Conv2D(128, (3, 3), activation='relu', padding='same', name='conv2_2_' + name)(x)
+    x = MaxPooling2D((2, 2), strides=(2, 2), name='pool2_' + name)(x)
     return x
 
 
 def mid(x, name):  # 0.1538 %     Approx. 50% of network (45% :D)
     # Block 3
-    x = Conv2D(256, (3, 3), activation='relu', padding='same', name='conv3_1_'+name)(x)
-    x = Conv2D(256, (3, 3), activation='relu', padding='same', name='conv3_2_'+name)(x)
+    x = Conv2D(256, (3, 3), activation='relu', padding='same', name='conv3_1_' + name)(x)
+    x = Conv2D(256, (3, 3), activation='relu', padding='same', name='conv3_2_' + name)(x)
     return x
 
 
 def midtop(x, name):  # 0.1538     Approx. 65% of network
-    x = Conv2D(256, (3, 3), activation='relu', padding='same', name='conv3_3_'+name)(x)
-    x = MaxPooling2D((2, 2), strides=(2, 2), name='pool3_'+name)(x)
+    x = Conv2D(256, (3, 3), activation='relu', padding='same', name='conv3_3_' + name)(x)
+    x = MaxPooling2D((2, 2), strides=(2, 2), name='pool3_' + name)(x)
     # Block 4
-    x = Conv2D(512, (3, 3), activation='relu', padding='same', name='conv4_1_'+name)(x)
+    x = Conv2D(512, (3, 3), activation='relu', padding='same', name='conv4_1_' + name)(x)
     return x
 
 
 def top(x, name):  # 0.3846     100%
-    x = Conv2D(512, (3, 3), activation='relu', padding='same', name='conv4_2_'+name)(x)
-    x = Conv2D(512, (3, 3), activation='relu', padding='same', name='conv4_3_'+name)(x)
-    x = MaxPooling2D((2, 2), strides=(2, 2), name='pool4_'+name)(x)
+    x = Conv2D(512, (3, 3), activation='relu', padding='same', name='conv4_2_' + name)(x)
+    x = Conv2D(512, (3, 3), activation='relu', padding='same', name='conv4_3_' + name)(x)
+    x = MaxPooling2D((2, 2), strides=(2, 2), name='pool4_' + name)(x)
     # Block 5
     x = Conv2D(512, (3, 3), activation='relu', padding='same', name='conv5_1')(x)
     x = Conv2D(512, (3, 3), activation='relu', padding='same', name='conv5_2')(x)

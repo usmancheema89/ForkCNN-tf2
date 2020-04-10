@@ -22,17 +22,67 @@ from keras.models import Model
 from keras import layers
 
 
+def combine_stream(x_1, x_2, merge):
+    if merge == "concatenate":
+        return concatenate([x_1, x_2], name="STREAM_MERGE_CONCAT")
+    if merge == "addition":
+        return add([x_1, x_2], name="STREAM_MERGE_ADD")
+
+
+def bottom(image_input, bn_axis, name):
+    x = Conv2D(64, (7, 7), use_bias=False, strides=(2, 2), padding='same',
+               name='conv1/7x7_s2_' + name)(image_input)
+    x = BatchNormalization(axis=bn_axis, name='conv1/7x7_s2/bn_' + name)(x)
+    x = Activation('relu')(x)
+    x = MaxPooling2D((3, 3), strides=(2, 2))(x)
+    x = resnet_conv_block(x, 3, [64, 64, 256], stage=2, block=1, strides=(1, 1), name=name)
+    x = resnet_identity_block(x, 3, [64, 64, 256], stage=2, block=2, name=name)
+    x = resnet_identity_block(x, 3, [64, 64, 256], stage=2, block=3, name=name)
+    x = resnet_conv_block(x, 3, [128, 128, 512], stage=3, block=1, name=name)
+    return x
+
+
+def mid(x, name):
+    filter3 = K.int_shape(x)[3]
+    x = resnet_identity_block(x, 3, [128, 128, filter3], stage=3, block=2, name=name)
+    x = resnet_identity_block(x, 3, [128, 128, filter3], stage=3, block=3, name=name)
+    x = resnet_identity_block(x, 3, [128, 128, filter3], stage=3, block=4, name=name)
+    return x
+
+
+def midtop(x, name):
+    filter3 = K.int_shape(x)[3]
+    x = resnet_conv_block(x, 3, [256, 256, filter3], stage=4, block=1, name=name)
+    x = resnet_identity_block(x, 3, [256, 256, filter3], stage=4, block=2, name=name)
+    x = resnet_identity_block(x, 3, [256, 256, filter3], stage=4, block=3, name=name)
+    return x
+
+
+def top(x, name):
+    filter3 = K.int_shape(x)[3]
+    x = resnet_identity_block(x, 3, [256, 256, filter3], stage=4, block=4, name=name)
+    x = resnet_identity_block(x, 3, [256, 256, filter3], stage=4, block=5, name=name)
+    x = resnet_identity_block(x, 3, [256, 256, filter3], stage=4, block=6, name=name)
+
+    x = resnet_conv_block(x, 3, [512, 512, filter3], stage=5, block=1, name=name)
+    x = resnet_identity_block(x, 3, [512, 512, filter3], stage=5, block=2, name=name)
+    x = resnet_identity_block(x, 3, [512, 512, filter3], stage=5, block=3, name=name)
+
+    x = AveragePooling2D((7, 7), name='avg_pool')(x)
+    return x
+
+
 def resnet_identity_block(input_tensor, kernel_size, filters, stage, block,
-                          bias=False):
+                          bias=False, name=None):
     filters1, filters2, filters3 = filters
     if K.image_data_format() == 'channels_last':
         bn_axis = 3
     else:
         bn_axis = 1
-    conv1_reduce_name = 'conv' + str(stage) + "_" + str(block) + "_1x1_reduce"
+    conv1_reduce_name = 'conv' + str(stage) + "_" + str(block) + "_1x1_reduce_" + name
     conv1_increase_name = 'conv' + str(stage) + "_" + str(
-        block) + "_1x1_increase"
-    conv3_name = 'conv' + str(stage) + "_" + str(block) + "_3x3"
+        block) + "_1x1_increase_" + name
+    conv3_name = 'conv' + str(stage) + "_" + str(block) + "_3x3_" + name
 
     x = Conv2D(filters1, (1, 1), use_bias=bias, name=conv1_reduce_name)(
         input_tensor)
@@ -53,17 +103,17 @@ def resnet_identity_block(input_tensor, kernel_size, filters, stage, block,
 
 
 def resnet_conv_block(input_tensor, kernel_size, filters, stage, block,
-                      strides=(2, 2), bias=False):
+                      strides=(2, 2), bias=False, name=None):
     filters1, filters2, filters3 = filters
     if K.image_data_format() == 'channels_last':
         bn_axis = 3
     else:
         bn_axis = 1
-    conv1_reduce_name = 'conv' + str(stage) + "_" + str(block) + "_1x1_reduce"
+    conv1_reduce_name = 'conv' + str(stage) + "_" + str(block) + "_1x1_reduce_" + name
     conv1_increase_name = 'conv' + str(stage) + "_" + str(
-        block) + "_1x1_increase"
-    conv1_proj_name = 'conv' + str(stage) + "_" + str(block) + "_1x1_proj"
-    conv3_name = 'conv' + str(stage) + "_" + str(block) + "_3x3"
+        block) + "_1x1_increase_" + name
+    conv1_proj_name = 'conv' + str(stage) + "_" + str(block) + "_1x1_proj_" + name
+    conv3_name = 'conv' + str(stage) + "_" + str(block) + "_3x3_" + name
 
     x = Conv2D(filters1, (1, 1), strides=strides, use_bias=bias,
                name=conv1_reduce_name)(input_tensor)
@@ -88,75 +138,78 @@ def resnet_conv_block(input_tensor, kernel_size, filters, stage, block,
     return x
 
 
-def RESNET50(include_top=True, weights='vggface',
-             input_tensor=None, input_shape=None,
-             pooling=None,
-             classes=8631):
-    input_shape = _obtain_input_shape(input_shape,
-                                      default_size=224,
-                                      min_size=32,
-                                      data_format=K.image_data_format(),
-                                      require_flatten=include_top,
-                                      weights=weights)
+def RESNET50_vanilla(input_image_1, bn_axis):
+    print("Using single stream VGG16")
+    output = bottom(input_image_1, bn_axis, 'single_stream')
+    output = top(midtop(mid(output, 'single_stream'), 'single_stream'), 'single_stream')
+    return output
 
-    if input_tensor is None:
-        img_input = Input(shape=input_shape)
-    else:
-        if not K.is_keras_tensor(input_tensor):
-            img_input = Input(tensor=input_tensor, shape=input_shape)
-        else:
-            img_input = input_tensor
+
+def RESNET50_two_stream_30(input_image_1, input_image_2, bn_axis, merge_style):
+    x_1 = bottom(input_image_1, bn_axis, 'visible_stream')
+    x_2 = bottom(input_image_2, bn_axis, 'thermal_stream')
+    output = combine_stream(x_1, x_2, merge_style)
+    output = mid(output, 'merged')
+    output = midtop(output, 'merged')
+    return top(output, 'merged')
+    # return top(midtop(mid(output)))
+
+
+def RESNET50_two_stream_50(input_image_1, input_image_2, bn_axis, merge_style):
+    x_1 = mid(bottom(input_image_1, bn_axis, 'visible_stream'), name='visible_stream')
+    x_2 = mid(bottom(input_image_2, bn_axis, 'thermal_stream'), name='thermal_stream')
+    output = combine_stream(x_1, x_2, merge_style)
+    return top(midtop(output, 'merged'), 'merged')
+
+
+def RESNET50_two_stream_70(input_image_1, input_image_2, bn_axis, merge_style):
+    x_1 = midtop(mid(bottom(input_image_1, bn_axis, 'visible_stream'), name='visible_stream'), name='visible_stream')
+    x_2 = midtop(mid(bottom(input_image_2, bn_axis, 'thermal_stream'), name='thermal_stream'), name='thermal_stream')
+    output = combine_stream(x_1, x_2, merge_style)
+    return top(output, 'merged')
+
+
+def RESNET50(input_shape, include_top, input_1_tensor, input_2_tensor, stream, merge_style, merge_point, pooling,
+             weights, classes):
+    # input_shape = _obtain_input_shape(input_shape,
+    #                                   default_size=224,
+    #                                   min_size=32,
+    #                                   data_format=K.image_data_format(),
+    #                                   require_flatten=include_top,
+    #                                   weights=weights)
+
     if K.image_data_format() == 'channels_last':
         bn_axis = 3
     else:
         bn_axis = 1
 
-    x = Conv2D(
-        64, (7, 7), use_bias=False, strides=(2, 2), padding='same',
-        name='conv1/7x7_s2')(img_input)
-    x = BatchNormalization(axis=bn_axis, name='conv1/7x7_s2/bn')(x)
-    x = Activation('relu')(x)
-    x = MaxPooling2D((3, 3), strides=(2, 2))(x)
+    input_image_1 = Input(shape=input_shape)
+    input_image_2 = Input(shape=input_shape)
+    if stream == 1:
+        inputs = input_image_1
+        output = RESNET50_vanilla(input_image_1, bn_axis)
 
-    x = resnet_conv_block(x, 3, [64, 64, 256], stage=2, block=1, strides=(1, 1))
-    x = resnet_identity_block(x, 3, [64, 64, 256], stage=2, block=2)
-    x = resnet_identity_block(x, 3, [64, 64, 256], stage=2, block=3)
+    if stream == 2:
+        inputs = [input_image_1, input_image_2]
+        if merge_point == 30:
+            output = RESNET50_two_stream_30(input_image_1, input_image_2, bn_axis, merge_style)
 
-    x = resnet_conv_block(x, 3, [128, 128, 512], stage=3, block=1)
-    x = resnet_identity_block(x, 3, [128, 128, 512], stage=3, block=2)
-    x = resnet_identity_block(x, 3, [128, 128, 512], stage=3, block=3)
-    x = resnet_identity_block(x, 3, [128, 128, 512], stage=3, block=4)
+        if merge_point == 50:
+            output = RESNET50_two_stream_50(input_image_1, input_image_2, bn_axis, merge_style)
 
-    x = resnet_conv_block(x, 3, [256, 256, 1024], stage=4, block=1)
-    x = resnet_identity_block(x, 3, [256, 256, 1024], stage=4, block=2)
-    x = resnet_identity_block(x, 3, [256, 256, 1024], stage=4, block=3)
-    x = resnet_identity_block(x, 3, [256, 256, 1024], stage=4, block=4)
-    x = resnet_identity_block(x, 3, [256, 256, 1024], stage=4, block=5)
-    x = resnet_identity_block(x, 3, [256, 256, 1024], stage=4, block=6)
-
-    x = resnet_conv_block(x, 3, [512, 512, 2048], stage=5, block=1)
-    x = resnet_identity_block(x, 3, [512, 512, 2048], stage=5, block=2)
-    x = resnet_identity_block(x, 3, [512, 512, 2048], stage=5, block=3)
-
-    x = AveragePooling2D((7, 7), name='avg_pool')(x)
-
+        if merge_point == 70:
+            output = RESNET50_two_stream_70(input_image_1, input_image_2, bn_axis, merge_style)
     if include_top:
-        x = Flatten()(x)
-        x = Dense(classes, activation='softmax', name='classifier')(x)
+        output = Flatten()(output)
+        output = Dense(classes, activation='softmax', name='classifier')(output)
     else:
         if pooling == 'avg':
-            x = GlobalAveragePooling2D()(x)
+            x = GlobalAveragePooling2D()(output)
         elif pooling == 'max':
-            x = GlobalMaxPooling2D()(x)
+            x = GlobalMaxPooling2D()(output)
 
-    # Ensure that the model takes into account
-    # any potential predecessors of `input_tensor`.
-    if input_tensor is not None:
-        inputs = get_source_inputs(input_tensor)
-    else:
-        inputs = img_input
     # Create model.
-    model = Model(inputs, x, name='vggface_resnet50')
+    model = Model(inputs, output, name='vggface_resnet50')
 
     # load weights
     if weights == 'vggface':
@@ -191,7 +244,3 @@ def RESNET50(include_top=True, weights='vggface',
         model.load_weights(weights)
 
     return model
-
-
-
-
